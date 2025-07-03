@@ -648,6 +648,74 @@ You can also configure a self-hosted model in the configuration file under the `
 }
 ```
 
+## Personal Reasoning System (PRS) Integration
+
+OpenCode now features an integrated Personal Reasoning System (PRS) to enhance the AI's contextual understanding, memory, and reasoning capabilities. This system allows the AI to create detailed logs of its thought processes for tasks and refer back to them.
+
+### PRS Tools
+
+Two new tools are available for interacting with the PRS:
+
+*   **`GeneratePRSLog`**: Instructs the AI to perform a detailed, multi-step reasoning process for a given task and save the results into a structured PRS log file.
+    *   **Parameters**:
+        *   `task` (string, required): The detailed description of the task.
+        *   `additional_context` (string, optional): Any extra context relevant to the task.
+        *   `constraints` (string, optional): Any constraints that must be followed.
+    *   **Example Usage (in chat)**: `Use GeneratePRSLog: {"task": "Develop a plan for feature X", "constraints": "Must use Go language"}`
+
+*   **`PRSMemory`**: Allows interaction with previously saved PRS logs.
+    *   **Parameters**:
+        *   `action` (string, required): The action to perform:
+            *   `"list"`: Lists all available PRS logs.
+            *   `"view"`: Displays the content of a specific PRS log. Requires `index`.
+            *   `"search"`: Searches for a keyword across all PRS logs. Requires `keyword`.
+        *   `index` (string, optional): The 1-based index of the log to view (obtained from `list` action). Required for `view`.
+        *   `keyword` (string, optional): The keyword to search for. Required for `search`.
+    *   **Example Usage (in chat)**:
+        *   `Use PRSMemory: {"action": "list"}`
+        *   `Use PRSMemory: {"action": "view", "index": "1"}`
+        *   `Use PRSMemory: {"action": "search", "keyword": "feature X"}`
+
+### PRS Cognitive Mode
+
+You can enable a deeper "PRS Cognitive Mode" where the AI is explicitly instructed to use PRS principles in its operations. When enabled:
+*   The AI's system prompt is augmented with detailed PRS operational guidelines.
+*   The AI will be more proactive in using the `GeneratePRSLog` and `PRSMemory` tools.
+*   The AI's responses will include a `[GOD MODE: ON]` footer, as per the PRS protocol.
+
+**Configuration:**
+
+PRS features can be configured in your `.opencode.json` file (usually `~/.config/opencode/opencode.json` or XDG equivalent) within a `prs` object:
+
+```json
+{
+  // ... other configurations ...
+  "prs": {
+    "logsPath": "my_prs_records", // Optional. Path for PRS logs. Can be absolute, or relative to OpenCode's data directory. Defaults to "<OpenCode_Data_Dir>/prs_logs".
+    "cognitiveModeEnabled": false // Optional. Set to true to enable PRS Cognitive Mode. Defaults to false.
+  }
+}
+```
+
+### Using PRS with LMStudio (or other local LLMs)
+
+The `GeneratePRSLog` tool, and by extension the PRS Cognitive Mode, will use the same LLM provider as the main agent. To use this with LMStudio:
+1.  Ensure LMStudio is running and provides an OpenAI-compatible API endpoint.
+2.  Set the `LOCAL_ENDPOINT` environment variable to your LMStudio endpoint (e.g., `export LOCAL_ENDPOINT=http://localhost:1234/v1`).
+3.  Configure your `opencode` agent (e.g., "coder") to use a local model in `.opencode.json`:
+    ```json
+    {
+      // ...
+      "agents": {
+        "coder": {
+          "model": "local/your-model-identifier-from-lmstudio"
+        }
+      }
+      // ...
+    }
+    ```
+OpenCode's PRS system will then route its LLM calls through this local endpoint.
+
 ## Development
 
 ### Prerequisites

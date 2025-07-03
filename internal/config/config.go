@@ -88,12 +88,19 @@ type Config struct {
 	Providers    map[models.ModelProvider]Provider `json:"providers,omitempty"`
 	LSP          map[string]LSPConfig              `json:"lsp,omitempty"`
 	Agents       map[AgentName]Agent               `json:"agents,omitempty"`
+	PRS          PRSConfig                         `json:"prs,omitempty"` // Added PRS Config
 	Debug        bool                              `json:"debug,omitempty"`
 	DebugLSP     bool                              `json:"debugLSP,omitempty"`
 	ContextPaths []string                          `json:"contextPaths,omitempty"`
 	TUI          TUIConfig                         `json:"tui"`
 	Shell        ShellConfig                       `json:"shell,omitempty"`
 	AutoCompact  bool                              `json:"autoCompact,omitempty"`
+}
+
+// PRSConfig defines configuration specific to the Personal Reasoning System.
+type PRSConfig struct {
+	LogsPath             string `json:"logsPath,omitempty"`
+	CognitiveModeEnabled bool   `json:"cognitiveModeEnabled,omitempty"`
 }
 
 // Application constants
@@ -240,6 +247,13 @@ func setDefaults(debug bool) {
 	}
 	viper.SetDefault("shell.path", shellPath)
 	viper.SetDefault("shell.args", []string{"-l"})
+
+	// Default PRS logs path (can be overridden by user config)
+	// Note: Actual resolution to full path happens in prs.SavePRSLog if this remains empty or is relative.
+	// For viper, we just set a default string.
+	viper.SetDefault("prs.logsPath", filepath.Join(defaultDataDirectory, "prs_logs"))
+	viper.SetDefault("prs.cognitiveModeEnabled", false) // Default to false
+
 
 	if debug {
 		viper.SetDefault("debug", true)
@@ -825,11 +839,15 @@ func updateCfgFile(updateCfg func(config *Config)) error {
 	configFile := viper.ConfigFileUsed()
 	var configData []byte
 	if configFile == "" {
-		homeDir, err := os.UserHomeDir()
+		userConfigDir, err := os.UserConfigDir()
 		if err != nil {
-			return fmt.Errorf("failed to get home directory: %w", err)
+			return fmt.Errorf("failed to get user config directory: %w", err)
 		}
-		configFile = filepath.Join(homeDir, fmt.Sprintf(".%s.json", appName))
+		configFile = filepath.Join(userConfigDir, appName, fmt.Sprintf("%s.json", appName))
+		// Ensure the directory exists
+		if err := os.MkdirAll(filepath.Dir(configFile), 0755); err != nil {
+			return fmt.Errorf("failed to create config directory: %w", err)
+		}
 		logging.Info("config file not found, creating new one", "path", configFile)
 		configData = []byte(`{}`)
 	} else {
@@ -861,6 +879,36 @@ func updateCfgFile(updateCfg func(config *Config)) error {
 
 	return nil
 }
+
+// GetDataDir returns the resolved absolute path to the application's data directory.
+// It prioritizes XDG_DATA_HOME, then falls back to a default location in the user's home directory.
+func GetDataDir() (string, error) {
+	if cfg == nil || cfg.Data.Directory == "" {
+		// Fallback if config not loaded or directory not set, though Data.Directory should have a default.
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("failed to get user home directory: %w", err)
+		}
+		return filepath.Join(homeDir, defaultDataDirectory), nil
+	}
+
+	if filepath.IsAbs(cfg.Data.Directory) {
+		return cfg.Data.Directory, nil
+	}
+
+	// Try XDG_DATA_HOME
+	if xdgDataHome := os.Getenv("XDG_DATA_HOME"); xdgDataHome != "" {
+		return filepath.Join(xdgDataHome, appName, cfg.Data.Directory), nil
+	}
+
+	// Fallback to $HOME/.local/share
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to get user home directory: %w", err)
+	}
+	return filepath.Join(homeDir, ".local", "share", appName, cfg.Data.Directory), nil
+}
+
 
 // Get returns the current configuration.
 // It's safe to call this function multiple times.

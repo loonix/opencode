@@ -703,7 +703,9 @@ func (a *agent) Summarize(ctx context.Context, sessionID string) error {
 	return nil
 }
 
-func createAgentProvider(agentName config.AgentName) (provider.Provider, error) {
+// CreateAgentProvider creates a new provider instance based on the agent's configuration.
+// Exported for use in other packages like app to prepare tools.
+func CreateAgentProvider(agentName config.AgentName) (provider.Provider, error) {
 	cfg := config.Get()
 	agentConfig, ok := cfg.Agents[agentName]
 	if !ok {

@@ -10,10 +10,29 @@ import (
 	"github.com/opencode-ai/opencode/internal/config"
 	"github.com/opencode-ai/opencode/internal/llm/models"
 	"github.com/opencode-ai/opencode/internal/logging"
+	"github.com/opencode-ai/opencode/internal/prs" // Added PRS import
 )
 
 func GetAgentPrompt(agentName config.AgentName, provider models.ModelProvider) string {
+	cfg := config.Get() // Get app config
 	basePrompt := ""
+
+	// If PRS Cognitive Mode is enabled, it significantly alters the base prompt.
+	if cfg != nil && cfg.PRS.CognitiveModeEnabled && (agentName == config.AgentCoder || agentName == config.AgentTask) {
+		// For Coder and Task agents, PRS mode takes over the primary instructions.
+		// Other specialized agents like Title or Summarizer might not use PRS mode or have simpler versions.
+		// For now, Coder and Task agents get the full PRS treatment.
+		basePrompt = prs.GetPRSModeSystemPrompt()
+		// Append project-specific context AFTER PRS instructions
+		projectContext := getContextFromPaths()
+		logging.Debug("Context content for PRS mode", "Context", projectContext)
+		if projectContext != "" {
+			return fmt.Sprintf("%s\n\n# Additional Project-Specific Context (to be used within PRS framework)\nFollow these instructions as part of your PRS cognitive process:\n%s", basePrompt, projectContext)
+		}
+		return basePrompt // Return PRS prompt, possibly without extra project context if none found
+	}
+
+	// Standard prompt determination if PRS mode is not active or not applicable
 	switch agentName {
 	case config.AgentCoder:
 		basePrompt = CoderPrompt(provider)

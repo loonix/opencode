@@ -59,21 +59,42 @@ func New(ctx context.Context, conn *sql.DB) (*App, error) {
 	// Initialize LSP clients in the background
 	go app.initLSPClients(ctx)
 
-	var err error
+	// Create the main provider for the CoderAgent first
+	// Assuming agent.CreateAgentProvider is made available (exported)
+	// from the agent package, or its logic is replicated here.
+	// For this change, we'll assume it's exported or a similar utility exists.
+	// If CreateAgentProvider is not exported from agent package, this will need adjustment.
+	coderAgentProvider, err := agent.CreateAgentProvider(config.AgentCoder)
+	if err != nil {
+		logging.Error("Failed to create provider for coder agent", "error", err)
+		return nil, fmt.Errorf("failed to create provider for coder agent: %w", err)
+	}
+
+	appCfg := config.Get()
+	if appCfg == nil {
+		return nil, fmt.Errorf("failed to get application configuration")
+	}
+
+	coderTools := agent.CoderAgentTools(
+		app.Permissions,
+		app.Sessions,
+		app.Messages,
+		app.History,
+		app.LSPClients,
+		appCfg,             // Pass the app config
+		coderAgentProvider, // Pass the created provider
+	)
+
 	app.CoderAgent, err = agent.NewAgent(
 		config.AgentCoder,
 		app.Sessions,
 		app.Messages,
-		agent.CoderAgentTools(
-			app.Permissions,
-			app.Sessions,
-			app.Messages,
-			app.History,
-			app.LSPClients,
-		),
+		coderTools, // Pass the fully prepared tools list
+		// Note: NewAgent creates its own provider internally based on config.AgentCoder.
+		// The coderAgentProvider created above is specifically for CoderAgentTools dependency.
 	)
 	if err != nil {
-		logging.Error("Failed to create coder agent", err)
+		logging.Error("Failed to create coder agent", "error", err)
 		return nil, err
 	}
 

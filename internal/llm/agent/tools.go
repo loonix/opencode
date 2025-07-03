@@ -17,27 +17,36 @@ func CoderAgentTools(
 	messages message.Service,
 	history history.Service,
 	lspClients map[string]*lsp.Client,
+	appCfg *config.Config, // Added appConfig
+	agentMainProvider provider.Provider, // Added the agent's main provider
 ) []tools.BaseTool {
 	ctx := context.Background()
 	otherTools := GetMcpTools(ctx, permissions)
 	if len(lspClients) > 0 {
 		otherTools = append(otherTools, tools.NewDiagnosticsTool(lspClients))
 	}
-	return append(
-		[]tools.BaseTool{
-			tools.NewBashTool(permissions),
-			tools.NewEditTool(lspClients, permissions, history),
-			tools.NewFetchTool(permissions),
-			tools.NewGlobTool(),
-			tools.NewGrepTool(),
-			tools.NewLsTool(),
-			tools.NewSourcegraphTool(),
-			tools.NewViewTool(lspClients),
-			tools.NewPatchTool(lspClients, permissions, history),
-			tools.NewWriteTool(lspClients, permissions, history),
-			NewAgentTool(sessions, messages, lspClients),
-		}, otherTools...,
-	)
+
+	// Initialize PRS tools
+	prsLogTool := tools.NewGeneratePRSLogTool(appCfg, agentMainProvider)
+	prsMemoryTool := tools.NewPRSMemoryTool(appCfg)
+
+	baseAgentTools := []tools.BaseTool{
+		tools.NewBashTool(permissions),
+		tools.NewEditTool(lspClients, permissions, history),
+		tools.NewFetchTool(permissions),
+		tools.NewGlobTool(),
+		tools.NewGrepTool(),
+		tools.NewLsTool(),
+		tools.NewSourcegraphTool(),
+		tools.NewViewTool(lspClients),
+		tools.NewPatchTool(lspClients, permissions, history),
+		tools.NewWriteTool(lspClients, permissions, history),
+		NewAgentTool(sessions, messages, lspClients),
+		prsLogTool,    // Added PRS Log Tool
+		prsMemoryTool, // Added PRS Memory Tool
+	}
+
+	return append(baseAgentTools, otherTools...)
 }
 
 func TaskAgentTools(lspClients map[string]*lsp.Client) []tools.BaseTool {
